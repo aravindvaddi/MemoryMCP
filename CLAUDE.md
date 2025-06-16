@@ -64,3 +64,21 @@ async def tool_name(param: str) -> str:
 ## Current Status
 
 The project is in initial setup phase. The MCP server framework is installed but no memory-related functionality has been implemented yet.
+
+## Memory System Design
+
+A comprehensive design has been created for the memory system. See `MEMORY_DESIGN.md` for full details.
+
+Key design decisions:
+- SQLite storage with binary embeddings (1536-dim vectors)
+- Multi-agent support with separate memory stores per agent
+- Semantic search with recency and context weighting
+- Automatic context capture from environment and content
+- Memory decay and strengthening based on access patterns
+
+Implementation approach:
+1. Start with `initialize_agent`, `observe`, and `recall` tools
+2. Use OpenAI text-embedding-3-small for semantic search
+3. Store memories in SQLite with BLOB embedding storage
+4. Implement relevance scoring combining semantic similarity, recency, and context
+5. Add memory pruning when approaching 50K memories per agent
