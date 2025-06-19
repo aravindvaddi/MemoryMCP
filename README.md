@@ -4,12 +4,13 @@ A Model Context Protocol (MCP) server that provides persistent memory and learni
 
 ## Features
 
-- **Semantic Memory Storage**: Store observations with OpenAI embeddings for intelligent retrieval
+- **Semantic Memory Storage**: Store observations with local embeddings for intelligent retrieval (no API keys required!)
 - **Multi-Agent Support**: Each agent maintains its own isolated memory store
 - **Smart Retrieval**: Find relevant memories using semantic search with recency weighting
 - **Memory Decay**: Natural forgetting with strength-based memory persistence
 - **Context Awareness**: Automatic capture of system context, project details, and conversation patterns
 - **Reflection Capabilities**: Agents can analyze their memories to form higher-level insights
+- **Privacy-First**: All processing happens locally - no external API calls
 
 ## Installation
 
@@ -24,10 +25,7 @@ cd MemoryMCP
 uv pip install -e .
 ```
 
-3. Set up your OpenAI API key:
-```bash
-export OPENAI_API_KEY="your-api-key-here"
-```
+Note: The first run will download the embedding model (~80MB), which will be cached locally.
 
 ## Usage
 
@@ -77,9 +75,10 @@ The MCP server can be integrated with any MCP-compatible client.
 
 MemoryMCP uses:
 - **SQLite** for efficient local storage
-- **OpenAI text-embedding-3-small** for semantic search
-- **Binary BLOB storage** for embedding vectors
+- **Sentence Transformers** (all-MiniLM-L6-v2) for semantic search - no API keys needed!
+- **Binary BLOB storage** for embedding vectors (384 dimensions)
 - **Automatic context capture** for rich memory metadata
+- **100% local processing** - your data never leaves your machine
 
 See `MEMORY_DESIGN.md` for detailed architecture documentation.
 

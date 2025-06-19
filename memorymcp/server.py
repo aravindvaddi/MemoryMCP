@@ -15,9 +15,7 @@ import subprocess
 import struct
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-import asyncio
-import aiohttp
-from openai import AsyncOpenAI
+from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -29,16 +27,15 @@ mcp = FastMCP("Memory")
 # Base directory for all agent memory stores
 MEMORY_BASE_DIR = Path.home() / ".memorymcp" / "agents"
 
-# Initialize OpenAI client
-openai_client = None
-def get_openai_client():
-    global openai_client
-    if openai_client is None:
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable not set")
-        openai_client = AsyncOpenAI(api_key=api_key)
-    return openai_client
+# Initialize embedding model (using a small, efficient model)
+embedding_model = None
+def get_embedding_model():
+    global embedding_model
+    if embedding_model is None:
+        # Using all-MiniLM-L6-v2: small, fast, good quality
+        # 384 dimensions, ~80MB download
+        embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+    return embedding_model
 
 class MemoryStore:
     """SQLite-based memory store with semantic search capabilities"""
@@ -96,7 +93,7 @@ class MemoryStore:
     async def add_memory(self, content: str, embedding: np.ndarray, context: Optional[Dict[str, Any]] = None, metadata: Optional[Dict[str, Any]] = None) -> int:
         """Add a new memory with embedding to the store"""
         # Convert numpy array to binary blob
-        embedding_blob = struct.pack('f' * 1536, *embedding.tolist())
+        embedding_blob = struct.pack('f' * 384, *embedding.tolist())
         
         with closing(sqlite3.connect(self.db_path)) as conn:
             cursor = conn.execute("""
@@ -137,7 +134,7 @@ class MemoryStore:
                 if len(embedding_blob) == 1:  # Skip placeholder embeddings
                     continue
                     
-                memory_embedding = np.array(struct.unpack('f' * 1536, embedding_blob))
+                memory_embedding = np.array(struct.unpack('f' * 384, embedding_blob))
                 
                 # Calculate semantic similarity
                 semantic_similarity = cosine_similarity(
@@ -280,14 +277,11 @@ async def observe(
     
     # Generate embedding for the content
     try:
-        client = get_openai_client()
-        response = await client.embeddings.create(
-            input=content,
-            model="text-embedding-3-small"
-        )
-        embedding = np.array(response.data[0].embedding)
+        model = get_embedding_model()
+        # Generate embedding (sentence-transformers handles batching internally)
+        embedding = model.encode(content, convert_to_numpy=True)
     except Exception as e:
-        return f"Error generating embedding: {str(e)}. Make sure OPENAI_API_KEY is set."
+        return f"Error generating embedding: {str(e)}"
     
     # Capture automatic context
     auto_context = capture_system_context() if context is None else context
@@ -329,12 +323,8 @@ async def recall(
     if query:
         # Generate embedding for the query
         try:
-            client = get_openai_client()
-            response = await client.embeddings.create(
-                input=query,
-                model="text-embedding-3-small"
-            )
-            query_embedding = np.array(response.data[0].embedding)
+            model = get_embedding_model()
+            query_embedding = model.encode(query, convert_to_numpy=True)
         except Exception as e:
             # Fallback to recent memories if embedding fails
             memories = store.get_recent_memories(limit)
@@ -394,12 +384,8 @@ async def reflect(
     
     # Generate embedding for the topic
     try:
-        client = get_openai_client()
-        response = await client.embeddings.create(
-            input=topic,
-            model="text-embedding-3-small"
-        )
-        topic_embedding = np.array(response.data[0].embedding)
+        model = get_embedding_model()
+        topic_embedding = model.encode(topic, convert_to_numpy=True)
     except Exception as e:
         return f"Error generating embedding for reflection: {str(e)}"
     
@@ -434,11 +420,7 @@ async def reflect(
     reflection_content = f"Reflected on '{topic}': Found {len(memories)} relevant memories with patterns in {list(tag_groups.keys())}"
     
     try:
-        reflection_response = await client.embeddings.create(
-            input=reflection_content,
-            model="text-embedding-3-small"
-        )
-        reflection_embedding = np.array(reflection_response.data[0].embedding)
+        reflection_embedding = model.encode(reflection_content, convert_to_numpy=True)
     except Exception as e:
         return f"Error storing reflection: {str(e)}"
     
