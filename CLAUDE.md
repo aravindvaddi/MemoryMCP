@@ -1,84 +1,153 @@
-# CLAUDE.md
+# MemoryMCP - Claude Documentation
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## Overview
 
-## Project Overview
-
-MemoryMCP is an MCP (Model Context Protocol) server implementation focused on memory-related functionality. The project uses FastMCP to create an MCP server that can interact with language models.
-
-## Technology Stack
-
-- **Language**: Python 3.11
-- **Framework**: FastMCP (MCP server framework)
-- **Package Manager**: UV (modern Python package manager)
-
-## Development Commands
-
-### Package Management
-```bash
-# Install dependencies
-uv pip install -e .
-
-# List installed packages
-uv pip list
-
-# Add new dependencies (edit pyproject.toml then run)
-uv pip install -e .
-```
-
-### Running the Server
-```bash
-# The MCP server can be run via the MCP CLI (once implemented)
-# Currently, server.py defines the MCP instance but needs implementation
-```
-
-## Architecture
-
-The project follows a minimal MCP server structure:
-
-- `server.py`: Main MCP server definition using FastMCP. This is where MCP tools, resources, and prompts should be implemented.
-- `main.py`: Entry point file (currently unused, may be removed or repurposed)
-- `pyproject.toml`: Project configuration and dependencies
-
-## MCP Server Implementation
-
-The MCP server in `server.py` is initialized but not yet implemented. To add functionality:
-
-1. Define tools using `@mcp.tool()` decorator
-2. Define resources using `@mcp.resource()` decorator  
-3. Define prompts using `@mcp.prompt()` decorator
-
-Example structure for adding MCP tools:
-```python
-from mcp.server.fastmcp import FastMCP
-
-mcp = FastMCP("Memory")
-
-@mcp.tool()
-async def tool_name(param: str) -> str:
-    """Tool description"""
-    # Implementation
-    return result
-```
+MemoryMCP is a Model Context Protocol (MCP) server that provides persistent memory and learning capabilities for AI assistants. It enables Claude and other AI agents to remember past interactions, learn from experiences, and maintain context across conversations.
 
 ## Current Status
 
-The project is in initial setup phase. The MCP server framework is installed but no memory-related functionality has been implemented yet.
+✅ **Fully Implemented and Functional**
 
-## Memory System Design
+The MemoryMCP server is complete with all core features working:
+- Semantic memory storage using local embeddings
+- Multi-agent support with isolated memory stores  
+- Context-aware memory capture
+- Reflection and insight generation
+- Memory export/import capabilities
+- Advanced search by context and content
 
-A comprehensive design has been created for the memory system. See `MEMORY_DESIGN.md` for full details.
+## Architecture
 
-Key design decisions:
-- SQLite storage with binary embeddings (1536-dim vectors)
-- Multi-agent support with separate memory stores per agent
-- Semantic search with recency and context weighting
-- Automatic context capture from environment and content
-- Memory decay and strengthening based on access patterns
+### Technology Stack
+- **Embedding Model**: Sentence Transformers (all-MiniLM-L6-v2)
+  - 384-dimensional embeddings
+  - ~80MB model download on first run
+  - Completely local - no API keys required
+- **Storage**: SQLite with binary BLOB storage for embeddings
+- **Framework**: MCP with FastMCP for tool definitions
+- **Language**: Python 3.11+
 
-Implementation approach:
-1. Start with `initialize_agent`, `observe`, and `recall` tools
-2. Use OpenAI text-embedding-3-small for semantic search
-3. Store memories in SQLite with BLOB embedding storage
-4. Implement relevance scoring combining semantic similarity, recency, and context
-5. Add memory pruning when approaching 50K memories per agent
+### Module Structure
+
+The codebase is organized into focused modules (~200 lines each):
+
+```
+memorymcp/
+├── __init__.py       # Entry point (19 lines)
+├── server.py         # MCP server and tool decorators (254 lines)
+├── tools.py          # Tool implementation logic (284 lines)
+├── memory_store.py   # SQLite storage backend (196 lines)
+└── context_utils.py  # Context capture utilities (172 lines)
+```
+
+### Key Design Decisions
+
+1. **Local Embeddings**: Switched from OpenAI to Sentence Transformers for privacy and cost
+2. **Modular Architecture**: Split monolithic server.py into focused modules
+3. **Async Support**: All memory operations are async-compatible
+4. **Context Capture**: Automatic detection of languages, frameworks, and project context
+5. **Memory Strength**: Implements memory strengthening on access (up to 10% boost per access)
+
+## Usage with Claude
+
+### Installation
+
+```bash
+# Clone and install
+git clone https://github.com/yourusername/MemoryMCP.git
+cd MemoryMCP
+uv pip install -e .
+```
+
+### Configuration
+
+Add to your Claude Desktop configuration:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "uv",
+      "args": ["run", "memorymcp"],
+      "cwd": "/path/to/MemoryMCP"
+    }
+  }
+}
+```
+
+### Available Tools
+
+1. **initialize_agent** - Set up agent memory store
+2. **observe** - Store observations and experiences
+3. **recall** - Retrieve relevant memories
+4. **reflect** - Generate insights from memories
+5. **list_agents** - List all agents
+6. **export_memories** - Export memories (JSON/Markdown)
+7. **search_by_context** - Advanced context search
+8. **get_context_summary** - Get knowledge summary
+
+## Implementation Details
+
+### Memory Storage Schema
+
+```sql
+CREATE TABLE memories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    embedding BLOB NOT NULL,        -- 384-dimensional vector
+    strength REAL DEFAULT 1.0,      -- Memory importance/strength
+    access_count INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_accessed DATETIME DEFAULT CURRENT_TIMESTAMP,
+    context JSON,                   -- System and inferred context
+    metadata JSON                   -- Tags, importance, type
+)
+```
+
+### Scoring Algorithm
+
+```python
+semantic_similarity = cosine_similarity(query_embedding, memory_embedding)
+days_old = (current_time - created_at).days
+recency_score = exp(-days_old / 30)  # 50% decay after 30 days
+final_score = (semantic_similarity * (1 - recency_weight) + 
+               recency_score * recency_weight) * strength
+```
+
+### Context Capture
+
+Automatically captures:
+- System context (OS, Python version, working directory)
+- Project indicators (.git, package.json, etc.)
+- Detected languages and frameworks from content
+- File references mentioned in observations
+
+## Testing
+
+```bash
+# Run linting
+uv run ruff check
+
+# Format code  
+uv run ruff format
+
+# Test functionality (see test examples in previous conversations)
+```
+
+## Maintenance Notes
+
+- The embedding model is cached after first download
+- Memory stores are located at `~/.memorymcp/agents/`
+- Each agent has its own SQLite database
+- Memories strengthen by 10% on each access (capped at 1.0)
+- No automatic pruning implemented yet (future enhancement)
+
+## Future Enhancements
+
+- [ ] Implement memory pruning (delete memories with strength < 0.1)
+- [ ] Add time-based decay mechanism
+- [ ] Support for episodic memory chains
+- [ ] Memory compression for old memories
+- [ ] Vector database integration for larger scale
+- [ ] Memory visualization tools

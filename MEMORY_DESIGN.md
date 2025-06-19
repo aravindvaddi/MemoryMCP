@@ -4,6 +4,16 @@
 
 Memory MCP is a Model Context Protocol server that provides persistent memory capabilities for AI agents. It enables agents to store observations from interactions and recall relevant memories based on semantic similarity, recency, and context.
 
+## Implementation Note
+
+This document describes the original design. The actual implementation differs in some key areas:
+- **Embeddings**: Uses Sentence Transformers (384 dimensions) instead of OpenAI (1536 dimensions)
+- **Tool Parameters**: Some parameter names differ (e.g., `content` vs `observation`)
+- **Memory Decay**: Currently only implements strength boost on access, not time-based decay
+- **Additional Features**: The implementation includes extra tools like `list_agents`, `export_memories`, `search_by_context`, and `get_context_summary`
+
+See README.md and CLAUDE.md for current implementation details.
+
 ## Core Concept
 
 The system mimics human memory patterns:
@@ -22,7 +32,7 @@ CREATE TABLE memories (
     id TEXT PRIMARY KEY,
     agent_id TEXT NOT NULL,
     content TEXT NOT NULL,
-    embedding BLOB NOT NULL,  -- 1536-dim vector stored as binary
+    embedding BLOB NOT NULL,  -- 1536-dim vector stored as binary (Note: Implementation uses 384-dim)
     strength REAL DEFAULT 1.0,
     access_count INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
